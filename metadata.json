@@ -1,0 +1,6 @@
+{
+  "name": "Kunu Media Downloader",
+  "description": "All-in-one video and audio downloading platform for legitimate direct media URLs and permitted public streams with SSRF protection and transparent platform analysis.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}
