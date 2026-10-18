@@ -25,7 +25,6 @@ export interface PlatformInfo {
   description: string;
   technicalLimitation: string;
   supportedAlternative: string;
-  exampleUrl: string;
   domains: string[];
 }
 
@@ -70,9 +69,8 @@ export const PLATFORMS: PlatformInfo[] = [
     supportStatus: 'direct_supported',
     statusLabel: 'Full Direct Download',
     description: 'Publicly accessible HTTP/HTTPS links pointing directly to MP4, WebM, MP3, WAV, OGG, or M4A files on CDNs, cloud buckets, or self-hosted servers.',
-    technicalLimitation: 'Subject to upstream server availability and file size limits (max 150 MB via proxy stream; unlimited via direct browser download).',
-    supportedAlternative: 'Supports both browser-native download and CORS-safe backend streaming proxy with real byte progress.',
-    exampleUrl: '/api/sample-media/cosmos-hd.mp4',
+    technicalLimitation: 'Subject to upstream server availability, link expiration, and file size limits (max 150 MB via proxy stream; unlimited via direct browser download).',
+    supportedAlternative: 'Supports both browser-native download and CORS-safe backend streaming proxy preserving original file quality.',
     domains: ['*.mp4', '*.webm', '*.mp3', '*.wav', '*.ogg', '*.m4a']
   },
   {
@@ -80,11 +78,10 @@ export const PLATFORMS: PlatformInfo[] = [
     name: 'YouTube',
     category: 'Video Platform',
     supportStatus: 'public_metadata_only',
-    statusLabel: 'oEmbed Metadata Only',
-    description: 'Detects standard YouTube videos, Shorts, and youtu.be links. Retrieves official public title, author, and high-resolution thumbnail via YouTube oEmbed.',
-    technicalLimitation: 'YouTube Terms of Service (Section 5.B) and cipher/DRM protections prohibit unauthorized third-party stream extraction without explicit creator authorization.',
-    supportedAlternative: 'Download your own videos directly from YouTube Studio, or use Creative Commons direct MP4 exports.',
-    exampleUrl: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
+    statusLabel: 'Unsupported Direct Extraction',
+    description: 'Detects standard YouTube videos, Shorts, and youtu.be links. Retrieves official public title, author, and thumbnail via YouTube oEmbed when available.',
+    technicalLimitation: 'YouTube Terms of Service (Section 5.B) and stream cipher/DRM protections prohibit third-party video stream extraction without explicit creator authorization.',
+    supportedAlternative: 'Download your own videos directly from YouTube Studio, or provide a direct link to an MP4/WebM file you own or have permission to access.',
     domains: ['youtube.com', 'youtu.be']
   },
   {
@@ -94,9 +91,8 @@ export const PLATFORMS: PlatformInfo[] = [
     supportStatus: 'restricted_platform',
     statusLabel: 'Auth / API Required',
     description: 'Identifies Instagram posts, Reels, and Stories URLs (`instagram.com/reel/...`, `instagram.com/p/...`).',
-    technicalLimitation: 'Meta Graph API requires authenticated app tokens and user permissions; unauthenticated scraping is blocked by login walls and rate limits.',
+    technicalLimitation: 'Meta Graph API requires authenticated app tokens and user permissions; unauthenticated stream extraction is blocked by login walls and platform access controls.',
     supportedAlternative: 'Use Instagram’s built-in "Download" option on public Reels in the mobile app or request your account archive from Meta Accounts Center.',
-    exampleUrl: 'https://www.instagram.com/reel/C8exampleReel/',
     domains: ['instagram.com', 'instagr.am', 'cdninstagram.com']
   },
   {
@@ -107,8 +103,7 @@ export const PLATFORMS: PlatformInfo[] = [
     statusLabel: 'Auth / API Required',
     description: 'Detects Facebook Watch videos, Facebook Reels, and `fb.watch` shortlinks.',
     technicalLimitation: 'Facebook video streams use segmented DASH manifests protected by session tokens and Meta Graph API access controls.',
-    supportedAlternative: 'Download your own uploaded videos via Facebook Creator Studio / Meta Business Suite or use direct `.mp4` CDN links if publicly permitted.',
-    exampleUrl: 'https://www.facebook.com/reel/1234567890',
+    supportedAlternative: 'Download your own uploaded videos via Meta Business Suite or supply a direct `.mp4` CDN URL if publicly accessible and permitted.',
     domains: ['facebook.com', 'fb.watch', 'fb.com', 'fbcdn.net']
   },
   {
@@ -120,7 +115,6 @@ export const PLATFORMS: PlatformInfo[] = [
     description: 'Recognizes WhatsApp shared links (`wa.me`, `whatsapp.com`) and encrypted CDN attachments (`mmg.whatsapp.net`).',
     technicalLimitation: 'WhatsApp media payloads on `mmg.whatsapp.net` are encrypted with AES-256 keys exchanged solely between client devices via the Signal protocol.',
     supportedAlternative: 'Save media directly inside WhatsApp Web/Desktop first, or host shared files on a direct HTTPS media link.',
-    exampleUrl: 'https://wa.me/15550199999',
     domains: ['whatsapp.com', 'wa.me', 'mmg.whatsapp.net']
   },
   {
@@ -128,11 +122,10 @@ export const PLATFORMS: PlatformInfo[] = [
     name: 'X (Twitter)',
     category: 'Social Media',
     supportStatus: 'public_metadata_only',
-    statusLabel: 'Direct CDN / oEmbed',
+    statusLabel: 'Direct CDN / API Required',
     description: 'Detects X (`x.com`, `twitter.com`) status URLs and direct `video.twimg.com` media streams.',
-    technicalLimitation: 'Standard post URLs require authenticated X API v2 access (paid tier). However, direct `video.twimg.com/*.mp4` links can be analyzed and downloaded if publicly accessible.',
+    technicalLimitation: 'Standard X status URLs require authenticated X API v2 access. Direct `video.twimg.com/*.mp4` file links can be downloaded if publicly accessible and not expired.',
     supportedAlternative: 'Provide a direct `video.twimg.com` `.mp4` URL if you have permission, or use X Premium’s native offline video download feature.',
-    exampleUrl: 'https://x.com/NASA/status/1780000000000000000',
     domains: ['x.com', 'twitter.com', 't.co', 'video.twimg.com', 'pbs.twimg.com']
   },
   {
@@ -144,7 +137,6 @@ export const PLATFORMS: PlatformInfo[] = [
     description: 'Detects TikTok video URLs (`tiktok.com/@user/video/...`) and fetches public oEmbed metadata when available.',
     technicalLimitation: 'TikTok video streams require signed cookies and device attestation headers. Bypassing creator download switches violates platform controls.',
     supportedAlternative: 'When a creator enables downloads, tap Share -> Save Video directly in the TikTok app or web player.',
-    exampleUrl: 'https://www.tiktok.com/@tiktok/video/7100000000000000000',
     domains: ['tiktok.com', 'vm.tiktok.com', 'tiktokcdn.com']
   },
   {
@@ -153,10 +145,9 @@ export const PLATFORMS: PlatformInfo[] = [
     category: 'Video Platform',
     supportStatus: 'public_metadata_only',
     statusLabel: 'oEmbed & Creator Downloads',
-    description: 'Detects Vimeo videos (`vimeo.com/...`) and retrieves real title, creator, duration, and resolution metadata via Vimeo’s public oEmbed API.',
+    description: 'Detects Vimeo videos (`vimeo.com/...`) and retrieves real title, creator, and thumbnail metadata via Vimeo’s public oEmbed API.',
     technicalLimitation: 'Direct MP4 extraction from player manifests requires owner API tokens unless the creator explicitly enabled public file downloads on Vimeo.',
     supportedAlternative: 'Use the native "Download" button below Vimeo videos where the creator has enabled public downloading, or paste a Vimeo Pro direct file link.',
-    exampleUrl: 'https://vimeo.com/76979871',
     domains: ['vimeo.com', 'player.vimeo.com']
   },
   {
@@ -166,9 +157,8 @@ export const PLATFORMS: PlatformInfo[] = [
     supportStatus: 'public_metadata_only',
     statusLabel: 'Direct v.redd.it / i.redd.it',
     description: 'Detects Reddit threads and direct `i.redd.it` / `v.redd.it` fallback MP4 media links.',
-    technicalLimitation: 'Reddit separates video (`DASH_720.mp4`) and audio (`DASH_audio.mp4`) tracks on `v.redd.it` and rate-limits unauthenticated JSON scraping.',
+    technicalLimitation: 'Reddit thread pages require OAuth API access and separate video (`DASH_720.mp4`) and audio (`DASH_audio.mp4`) tracks on `v.redd.it`.',
     supportedAlternative: 'Paste a direct `v.redd.it/.../DASH_720.mp4` link to download the video stream, or use Reddit’s native mobile Save Video action.',
-    exampleUrl: 'https://www.reddit.com/r/videos/comments/example',
     domains: ['reddit.com', 'redd.it', 'v.redd.it', 'i.redd.it']
   },
   {
@@ -180,7 +170,6 @@ export const PLATFORMS: PlatformInfo[] = [
     description: 'Identifies Telegram public channel post links (`t.me/channel/123`) and Telegram CDN links.',
     technicalLimitation: 'Telegram media files require MTProto client sessions or a Telegram Bot API token unless exposed via a direct public CDN file URL.',
     supportedAlternative: 'Use Telegram Desktop/Mobile’s built-in "Save File As..." button, which supports unrestricted downloads up to 4 GB.',
-    exampleUrl: 'https://t.me/telegram/100',
     domains: ['t.me', 'telegram.me', 'telegram.org', 'cdn-telegram.org']
   },
   {
@@ -191,8 +180,7 @@ export const PLATFORMS: PlatformInfo[] = [
     statusLabel: 'Direct pinimg.com Supported',
     description: 'Detects Pinterest Pin URLs (`pinterest.com/pin/...`) and direct `v.pinimg.com` MP4 video assets.',
     technicalLimitation: 'Pin wrapper pages require Pinterest API v5 authentication, while direct `v.pinimg.com/*.mp4` files can be downloaded directly.',
-    supportedAlternative: 'Provide a direct `v.pinimg.com/.../*.mp4` media URL or use Pinterest’s native image/asset download option.',
-    exampleUrl: 'https://www.pinterest.com/pin/123456789/',
+    supportedAlternative: 'Provide a direct `v.pinimg.com/.../*.mp4` media URL or use Pinterest’s native asset download option.',
     domains: ['pinterest.com', 'pin.it', 'pinimg.com', 'v.pinimg.com']
   },
   {
@@ -204,7 +192,6 @@ export const PLATFORMS: PlatformInfo[] = [
     description: 'Detects Dailymotion links (`dailymotion.com/video/...`, `dai.ly/...`) and retrieves public oEmbed metadata.',
     technicalLimitation: 'Dailymotion streams use HLS `.m3u8` segmented manifests with token expiration rather than progressive single-file MP4s.',
     supportedAlternative: 'Partners can download original MP4 masters directly from Dailymotion Studio.',
-    exampleUrl: 'https://www.dailymotion.com/video/x8example',
     domains: ['dailymotion.com', 'dai.ly']
   },
   {
@@ -216,7 +203,6 @@ export const PLATFORMS: PlatformInfo[] = [
     description: 'Detects Twitch VODs, live streams, and `clips.twitch.tv` URLs.',
     technicalLimitation: 'Twitch streams use authenticated HLS manifests requiring Helix API tokens and GQL integrity headers.',
     supportedAlternative: 'Streamers and editors can download VODs and Clips as direct MP4 files from the Twitch Creator Dashboard -> Video Producer.',
-    exampleUrl: 'https://www.twitch.tv/videos/1234567890',
     domains: ['twitch.tv', 'clips.twitch.tv']
   }
 ];
@@ -238,7 +224,6 @@ export function isPrivateOrReservedHost(hostname: string): boolean {
 
   if (!cleanHost) return true;
 
-  // Block localhost and internal domain suffixes
   if (
     cleanHost === 'localhost' ||
     cleanHost.endsWith('.localhost') ||
@@ -252,19 +237,17 @@ export function isPrivateOrReservedHost(hostname: string): boolean {
     return true;
   }
 
-  // IPv6 checks
   if (cleanHost.includes(':')) {
     if (
       cleanHost === '::1' ||
       cleanHost === '::' ||
-      cleanHost.startsWith('fe80:') || // Link-local
-      cleanHost.startsWith('fc') ||    // Unique local (fc00::/7)
-      cleanHost.startsWith('fd') ||    // Unique local (fd00::/8)
-      cleanHost.startsWith('ff')       // Multicast
+      cleanHost.startsWith('fe80:') ||
+      cleanHost.startsWith('fc') ||
+      cleanHost.startsWith('fd') ||
+      cleanHost.startsWith('ff')
     ) {
       return true;
     }
-    // IPv4-mapped IPv6 e.g. ::ffff:127.0.0.1
     const ipv4MappedMatch = cleanHost.match(/^::ffff:(\d+\.\d+\.\d+\.\d+)$/i);
     if (ipv4MappedMatch) {
       return isPrivateOrReservedHost(ipv4MappedMatch[1]);
@@ -272,12 +255,10 @@ export function isPrivateOrReservedHost(hostname: string): boolean {
     return false;
   }
 
-  // Block octal/hex/integer obfuscated IPv4 hostnames (e.g., 2130706433 or 0x7f000001)
   if (/^\d+$/.test(cleanHost) || /^0x[0-9a-f]+$/i.test(cleanHost)) {
     return true;
   }
 
-  // Standard dotted IPv4 check
   const ipv4Parts = cleanHost.split('.');
   if (ipv4Parts.length === 4 && ipv4Parts.every((part) => /^\d+$/.test(part))) {
     const octets = ipv4Parts.map((p) => Number(p));
@@ -285,25 +266,15 @@ export function isPrivateOrReservedHost(hostname: string): boolean {
       return true;
     }
     const [a, b] = octets;
-    // 0.0.0.0/8 (Current network)
     if (a === 0) return true;
-    // 10.0.0.0/8 (Private network)
     if (a === 10) return true;
-    // 100.64.0.0/10 (Carrier-grade NAT)
     if (a === 100 && b >= 64 && b <= 127) return true;
-    // 127.0.0.0/8 (Loopback)
     if (a === 127) return true;
-    // 169.254.0.0/16 (Link-local & AWS/GCP/Azure Cloud Metadata 169.254.169.254)
     if (a === 169 && b === 254) return true;
-    // 172.16.0.0/12 (Private network)
     if (a === 172 && b >= 16 && b <= 31) return true;
-    // 192.168.0.0/16 (Private network)
     if (a === 192 && b === 168) return true;
-    // 192.0.0.0/24 & 192.0.2.0/24 (IETF / TEST-NET)
     if (a === 192 && b === 0) return true;
-    // 198.18.0.0/15 (Benchmarking)
     if (a === 198 && (b === 18 || b === 19)) return true;
-    // 224.0.0.0/4 (Multicast) & 240.0.0.0/4 (Reserved/Broadcast)
     if (a >= 224) return true;
   }
 
@@ -312,22 +283,14 @@ export function isPrivateOrReservedHost(hostname: string): boolean {
 
 /**
  * Validates a user-supplied URL for HTTP/HTTPS protocol, syntax, and SSRF protection.
- * Also allows same-origin `/api/sample-media/...` relative URLs for built-in legal demo files.
  */
-export function validateMediaUrl(rawInput: string, allowRelativeSample = true): ValidationResult {
+export function validateMediaUrl(rawInput: string): ValidationResult {
   const trimmed = rawInput.trim();
   if (!trimmed) {
     return {
       valid: false,
       error: 'Please enter or paste a media URL to analyze.',
       errorCode: 'EMPTY_URL'
-    };
-  }
-
-  if (allowRelativeSample && trimmed.startsWith('/api/sample-media/')) {
-    return {
-      valid: true,
-      sanitizedUrl: trimmed
     };
   }
 
@@ -383,10 +346,7 @@ export function getDirectExtensionInfo(urlStr: string): {
   audioFormat?: AudioFormatLabel;
 } | null {
   try {
-    const pathname = urlStr.startsWith('/')
-      ? urlStr.split('?')[0].toLowerCase()
-      : new URL(urlStr).pathname.toLowerCase();
-
+    const pathname = new URL(urlStr).pathname.toLowerCase();
     for (const [ext, info] of Object.entries(SUPPORTED_DIRECT_EXTENSIONS)) {
       if (pathname.endsWith(ext)) {
         return { ext, ...info };
@@ -403,24 +363,17 @@ export function getDirectExtensionInfo(urlStr: string): {
  */
 export function detectPlatform(urlStr: string): PlatformInfo {
   const trimmed = urlStr.trim();
-  if (trimmed.startsWith('/api/sample-media/')) {
-    return PLATFORMS[0]; // direct
-  }
 
   let hostname = '';
-  let pathname = '';
   try {
     const u = new URL(trimmed);
     hostname = u.hostname.toLowerCase().replace(/^www\./, '');
-    pathname = u.pathname.toLowerCase();
   } catch {
     return PLATFORMS.find((p) => p.id === 'direct')!;
   }
 
-  // Check if it's a direct media file URL on any host
   const extInfo = getDirectExtensionInfo(trimmed);
 
-  // Match platform domains
   if (hostname === 'youtube.com' || hostname.endsWith('.youtube.com') || hostname === 'youtu.be') {
     return PLATFORMS.find((p) => p.id === 'youtube')!;
   }
@@ -458,7 +411,7 @@ export function detectPlatform(urlStr: string): PlatformInfo {
     return PLATFORMS.find((p) => p.id === 'twitch')!;
   }
 
-  if (extInfo || pathname.includes('/download') || pathname.includes('/media')) {
+  if (extInfo) {
     return PLATFORMS.find((p) => p.id === 'direct')!;
   }
 
@@ -470,14 +423,13 @@ export function detectPlatform(urlStr: string): PlatformInfo {
     statusLabel: 'HTTP Stream Inspection',
     description: `Inspects ${hostname} for direct downloadable video or audio MIME headers.`,
     technicalLimitation: 'Only direct media streams (video/* or audio/*) can be downloaded. HTML webpages without direct media streams cannot be converted into video files.',
-    supportedAlternative: 'Right-click the media element on the source website and copy its direct file address (.mp4, .webm, .mp3, .wav, .ogg, .m4a).',
-    exampleUrl: trimmed,
+    supportedAlternative: 'Provide a direct media file URL (.mp4, .webm, .mp3, .wav, .ogg, .m4a) that is publicly accessible.',
     domains: [hostname]
   };
 }
 
 /**
- * Maps an actual measured video height (or known stream resolution height) to an honest QualityLabel.
+ * Maps an actual measured video height (from ffprobe or browser HTMLVideoElement) to a QualityLabel.
  * Never fabricates multiple resolutions that do not exist at the source.
  */
 export function mapHeightToQualityLabel(height?: number | null): QualityLabel {
@@ -493,8 +445,8 @@ export function mapHeightToQualityLabel(height?: number | null): QualityLabel {
 }
 
 /**
- * Builds the honest list of available stream options from real inspected source attributes.
- * Never invents fake quality options that aren't present on the source.
+ * Builds the honest list of available stream options strictly from the actual inspected source file.
+ * Never fabricates 720p, 1080p, or 4K options that do not exist on the source.
  */
 export function buildVerifiedStreamOptions(params: {
   directUrl: string;
@@ -502,14 +454,6 @@ export function buildVerifiedStreamOptions(params: {
   sizeBytes?: number | null;
   videoWidth?: number | null;
   videoHeight?: number | null;
-  variantStreams?: Array<{
-    url: string;
-    height?: number;
-    width?: number;
-    mimeType: string;
-    sizeBytes?: number | null;
-    isAudioOnly?: boolean;
-  }>;
 }): AvailableStreamOption[] {
   const options: AvailableStreamOption[] = [];
   const cleanMime = params.mimeType.split(';')[0].trim().toLowerCase();
@@ -528,7 +472,6 @@ export function buildVerifiedStreamOptions(params: {
   else if (cleanMime === 'audio/mp4' || cleanMime === 'audio/x-m4a' || extInfo?.container === 'M4A') container = 'M4A';
 
   if (isAudio) {
-    // Provide the exact audio format that actually exists on the source
     const audioFormatLabel: AudioFormatLabel =
       container === 'MP3'
         ? 'MP3'
@@ -564,7 +507,7 @@ export function buildVerifiedStreamOptions(params: {
       });
     }
   } else {
-    // Video source: if we know the exact intrinsic resolution, include that exact quality tier + Original Quality
+    // Video source: only display the genuine measured resolution (if known) and Original Quality pointing to the exact source URL
     if (params.videoHeight && params.videoHeight > 0) {
       const detectedQuality = mapHeightToQualityLabel(params.videoHeight);
       const resolutionStr = params.videoWidth
@@ -584,7 +527,6 @@ export function buildVerifiedStreamOptions(params: {
       });
     }
 
-    // Always include "Original Quality" pointing to the unmodified source stream
     options.push({
       id: 'source-original',
       label: 'Original Quality',
@@ -594,47 +536,11 @@ export function buildVerifiedStreamOptions(params: {
       resolution:
         params.videoWidth && params.videoHeight
           ? `${params.videoWidth}×${params.videoHeight}`
-          : 'Source Stream',
+          : 'Original Source Stream',
       sizeBytes: params.sizeBytes ?? null,
       directUrl: params.directUrl,
       verifiedSource: true
     });
-  }
-
-  // If the source explicitly provides real multi-resolution or audio-only variants (e.g., our built-in open-licensed studio multi-variant media), include only those real files
-  if (params.variantStreams && params.variantStreams.length > 0) {
-    for (const v of params.variantStreams) {
-      if (v.isAudioOnly) {
-        const vExt = getDirectExtensionInfo(v.url);
-        options.push({
-          id: `variant-audio-${vExt?.container || 'track'}`,
-          label: 'Audio Only',
-          container: vExt?.container || 'WAV',
-          mimeType: v.mimeType,
-          isAudioOnly: true,
-          sizeBytes: v.sizeBytes ?? null,
-          directUrl: v.url,
-          verifiedSource: true
-        });
-      } else if (v.height) {
-        const qLabel = mapHeightToQualityLabel(v.height);
-        const alreadyExists = options.some((o) => o.label === qLabel && o.directUrl === v.url);
-        if (!alreadyExists) {
-          const vExt = getDirectExtensionInfo(v.url);
-          options.push({
-            id: `variant-${v.height}p`,
-            label: qLabel,
-            container: vExt?.container || 'MP4',
-            mimeType: v.mimeType,
-            isAudioOnly: false,
-            resolution: v.width ? `${v.width}×${v.height}` : `${v.height}p`,
-            sizeBytes: v.sizeBytes ?? null,
-            directUrl: v.url,
-            verifiedSource: true
-          });
-        }
-      }
-    }
   }
 
   return options;

@@ -21,20 +21,23 @@ test('SSRF protection blocks localhost, private IPs, and cloud metadata endpoint
   assert.equal(isPrivateOrReservedHost('169.254.169.254'), true);
   assert.equal(isPrivateOrReservedHost('metadata.google.internal'), true);
   assert.equal(isPrivateOrReservedHost('[::1]'), true);
-  assert.equal(isPrivateOrReservedHost('2130706433'), true); // decimal IP obfuscation
+  assert.equal(isPrivateOrReservedHost('2130706433'), true);
 
-  // Public domains and IPs should pass
   assert.equal(isPrivateOrReservedHost('172.32.0.1'), false);
   assert.equal(isPrivateOrReservedHost('8.8.8.8'), false);
   assert.equal(isPrivateOrReservedHost('cdn.example.com'), false);
 });
 
-test('validateMediaUrl enforces HTTP/HTTPS and blocks SSRF and invalid inputs', () => {
+test('validateMediaUrl enforces HTTP/HTTPS and blocks SSRF, relative fake paths, and invalid inputs', () => {
   assert.equal(validateMediaUrl('').valid, false);
   assert.equal(validateMediaUrl('').errorCode, 'EMPTY_URL');
 
   assert.equal(validateMediaUrl('not-a-url').valid, false);
   assert.equal(validateMediaUrl('not-a-url').errorCode, 'INVALID_URL');
+
+  // Relative paths like /api/sample-media/... must be rejected as invalid URLs
+  assert.equal(validateMediaUrl('/api/sample-media/cosmos-hd.mp4').valid, false);
+  assert.equal(validateMediaUrl('/api/sample-media/cosmos-hd.mp4').errorCode, 'INVALID_URL');
 
   assert.equal(validateMediaUrl('ftp://files.example.com/video.mp4').valid, false);
   assert.equal(validateMediaUrl('ftp://files.example.com/video.mp4').errorCode, 'UNSUPPORTED_PROTOCOL');
@@ -70,7 +73,7 @@ test('detectPlatform accurately classifies all 13 supported platforms and direct
   assert.equal(detectPlatform('https://cdn.example.org/files/podcast.mp3').id, 'direct');
 });
 
-test('mapHeightToQualityLabel and buildVerifiedStreamOptions never invent unverified resolutions', () => {
+test('mapHeightToQualityLabel and buildVerifiedStreamOptions preserve original source and never invent unverified resolutions', () => {
   assert.equal(mapHeightToQualityLabel(144), '144p');
   assert.equal(mapHeightToQualityLabel(240), '240p');
   assert.equal(mapHeightToQualityLabel(360), '360p');
@@ -80,7 +83,17 @@ test('mapHeightToQualityLabel and buildVerifiedStreamOptions never invent unveri
   assert.equal(mapHeightToQualityLabel(1440), '1440p 2K');
   assert.equal(mapHeightToQualityLabel(2160), '2160p 4K');
 
-  // A 720p direct MP4 without extra variant streams should only list 720p HD and Original Quality
+  // Without known height, only Original Quality is returned (never fabricated 720p/1080p/4K)
+  const unprobedVideoOpts = buildVerifiedStreamOptions({
+    directUrl: 'https://cdn.example.com/sample.mp4',
+    mimeType: 'video/mp4',
+    sizeBytes: 5242880
+  });
+  assert.equal(unprobedVideoOpts.length, 1);
+  assert.equal(unprobedVideoOpts[0].label, 'Original Quality');
+  assert.equal(unprobedVideoOpts[0].directUrl, 'https://cdn.example.com/sample.mp4');
+
+  // With measured 720p height, only 720p HD and Original Quality are returned
   const videoOpts = buildVerifiedStreamOptions({
     directUrl: 'https://cdn.example.com/sample.mp4',
     mimeType: 'video/mp4',
@@ -92,7 +105,6 @@ test('mapHeightToQualityLabel and buildVerifiedStreamOptions never invent unveri
   assert.equal(videoOpts[0].label, '720p HD');
   assert.equal(videoOpts[1].label, 'Original Quality');
 
-  // An MP3 direct audio file should only list MP3 and Audio Only
   const audioOpts = buildVerifiedStreamOptions({
     directUrl: 'https://cdn.example.com/track.mp3',
     mimeType: 'audio/mpeg',

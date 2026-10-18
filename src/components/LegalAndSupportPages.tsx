@@ -20,23 +20,23 @@ const FAQ_ITEMS: FAQItem[] = [
   },
   {
     category: 'Quality & Audio',
-    q: 'How are quality options (144p to 2160p 4K) and audio formats determined?',
-    a: 'We never invent fake quality buttons. When you analyze a direct media URL, our engine inspects the actual stream headers and intrinsic video dimensions. It displays Original Quality plus only those resolutions at or below the source’s real resolution, alongside MP3, M4A, WAV, and OGG audio formats when FFmpeg processing is available on the server.'
+    q: 'How are quality options and audio formats determined?',
+    a: 'We never invent or fabricate quality options. When you analyze a direct media URL, our engine inspects the actual stream headers and probes intrinsic video dimensions. It preserves Original Quality from the exact source file and displays only the resolution and audio format genuinely provided by that source.'
   },
   {
     category: 'CORS & Streaming',
     q: 'Why can’t browser JavaScript directly download every cross-origin file without a backend?',
-    a: 'Web browsers enforce Cross-Origin Resource Sharing (CORS) policies. If a third-party server does not include an Access-Control-Allow-Origin header, client-side fetch() requests are blocked by the browser. Our Express backend provides a secure /api/stream endpoint that streams permitted public media files with proper Content-Disposition attachment headers.'
+    a: 'Web browsers enforce Cross-Origin Resource Sharing (CORS) policies. If a third-party server does not include an Access-Control-Allow-Origin header, client-side fetch() requests are blocked by the browser. Our Express backend provides a secure /api/stream endpoint with HTTP Range support that streams permitted public media files directly from the remote source.'
   },
   {
     category: 'Security',
     q: 'How does Kunu Media Downloader protect against Server-Side Request Forgery (SSRF)?',
-    a: 'Every URL submitted to /api/analyze, /api/stream, or /api/convert is validated to allow only http:// and https:// schemes, reject embedded credentials, block localhost and private IPv4/IPv6 ranges (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.169.254), and verify DNS resolution on every redirect hop.'
+    a: 'Every URL submitted to /api/analyze or /api/stream is validated to allow only http:// and https:// schemes, reject embedded credentials, block localhost and private IPv4/IPv6 ranges (127.0.0.0/8, 10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16, 169.254.169.254), and verify DNS resolution on every redirect hop.'
   },
   {
     category: 'Deployment',
-    q: 'Can I deploy this application to Vercel and GitHub for free?',
-    a: 'Yes. You can push the repository to GitHub and deploy the frontend to Vercel for free. Keep in mind that Vercel Hobby serverless functions enforce a 10-second timeout, a 4.5 MB response payload limit, and do not provide a persistent FFmpeg binary for large video conversions. For full 150 MB streaming and FFmpeg audio conversion, deploy server.ts on Render, Railway, or Fly.io.'
+    q: 'Can I deploy this application to Render, Vercel, and GitHub for free?',
+    a: 'Yes. Push the repository to GitHub and deploy the full-stack Node.js server (server.ts) to Render, Railway, or Fly.io for full 150 MB streaming proxy support, or deploy the static frontend to Vercel.'
   }
 ];
 

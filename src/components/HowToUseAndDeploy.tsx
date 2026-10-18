@@ -2,10 +2,10 @@ import React, { useState } from 'react';
 import { Copy, Check, Terminal, Server, Globe, ShieldCheck } from 'lucide-react';
 
 interface HowToUseAndDeployProps {
-  onTrySample: (url: string) => void;
+  onOpenDownloader: () => void;
 }
 
-export const HowToUseAndDeploy: React.FC<HowToUseAndDeployProps> = ({ onTrySample }) => {
+export const HowToUseAndDeploy: React.FC<HowToUseAndDeployProps> = ({ onOpenDownloader }) => {
   const [copiedCmd, setCopiedCmd] = useState<string | null>(null);
 
   const handleCopyCode = async (id: string, code: string) => {
@@ -34,8 +34,8 @@ export const HowToUseAndDeploy: React.FC<HowToUseAndDeployProps> = ({ onTrySampl
     },
     {
       num: '03.',
-      title: 'Select a Verified Resolution or Audio Format',
-      body: 'Choose from the authentic resolutions present on the source (144p up to 2160p 4K, Original Quality, or Audio Only in MP3, M4A, WAV, OGG when server-side FFmpeg is available).'
+      title: 'Preview & Select Genuine Source Quality',
+      body: 'Preview the actual media file and its synchronized audio track directly in the player, then select the genuine source quality or audio stream.'
     },
     {
       num: '04.',
@@ -63,7 +63,7 @@ NODE_ENV=production
 MAX_DOWNLOAD_BYTES=157286400
 UPSTREAM_TIMEOUT_MS=15000
 RATE_LIMIT_WINDOW_MS=60000
-RATE_LIMIT_MAX_REQUESTS=30`;
+RATE_LIMIT_MAX_REQUESTS=60`;
 
   return (
     <section aria-labelledby="how-to-use-heading" className="w-full max-w-7xl mx-auto space-y-12">
@@ -96,17 +96,10 @@ RATE_LIMIT_MAX_REQUESTS=30`;
         <div className="flex flex-wrap items-center gap-3">
           <button
             type="button"
-            onClick={() => onTrySample('/api/sample-media/cosmos-hd.mp4')}
-            className="px-4 py-2.5 text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-xl transition-all cursor-pointer"
+            onClick={onOpenDownloader}
+            className="px-5 py-2.5 text-xs font-semibold text-white bg-gradient-to-r from-purple-600 to-blue-600 hover:from-purple-500 hover:to-blue-500 rounded-xl transition-all cursor-pointer"
           >
-            Try Live 720p HD Video Example
-          </button>
-          <button
-            type="button"
-            onClick={() => onTrySample('/api/sample-media/synthwave-harmony.wav')}
-            className="px-4 py-2.5 text-xs font-semibold text-purple-200 bg-purple-950/50 hover:bg-purple-900/60 border border-purple-500/30 rounded-xl transition-all cursor-pointer"
-          >
-            Try Live 44.1kHz WAV Audio Example
+            Go to Media Analyzer & Downloader
           </button>
         </div>
       </div>
@@ -136,7 +129,7 @@ RATE_LIMIT_MAX_REQUESTS=30`;
               <p><strong className="text-amber-300">Vercel Hobby Limits:</strong></p>
               <p>· Serverless functions time out after 10 seconds.</p>
               <p>· Response payload cap is 4.5 MB per function invocation.</p>
-              <p>· Arbitrary FFmpeg binary transcoding is not persisted on serverless functions.</p>
+              <p>· Use Render or Railway for full backend proxy streaming up to 150 MB.</p>
             </div>
           </div>
 
@@ -146,12 +139,11 @@ RATE_LIMIT_MAX_REQUESTS=30`;
               <span>Option B: Render / Railway / Fly.io (Full-Stack)</span>
             </div>
             <p className="text-xs text-slate-300 leading-relaxed">
-              Recommended when you need the Express streaming proxy (<code className="text-slate-200">/api/stream</code> up to 150 MB) and server-side FFmpeg audio/resolution conversion (<code className="text-slate-200">/api/convert</code>).
+              Recommended for running the full Express backend (<code className="text-slate-200">/api/analyze</code> and <code className="text-slate-200">/api/stream</code> up to 150 MB with HTTP Range support).
             </p>
             <div className="text-xs text-slate-400 space-y-1 pt-2 border-t border-slate-800/80">
-              <p><strong className="text-emerald-300">Full-Stack Advantages:</strong></p>
+              <p><strong className="text-emerald-300">Render Deployment Settings:</strong></p>
               <p>· Supports continuous HTTP byte streaming without a 4.5 MB buffer cap.</p>
-              <p>· Supports native <code className="text-slate-200">ffmpeg</code> binary for MP3/M4A/WAV/OGG extraction.</p>
               <p>· Build command: <code className="text-slate-200">npm install && npm run build</code></p>
               <p>· Start command: <code className="text-slate-200">npm start</code></p>
             </div>
@@ -168,7 +160,7 @@ RATE_LIMIT_MAX_REQUESTS=30`;
             <div className="text-xs text-slate-400 space-y-1 pt-2 border-t border-slate-800/80">
               <p>· Blocks <code className="text-slate-200">localhost</code>, <code className="text-slate-200">127.0.0.0/8</code>, <code className="text-slate-200">10.0.0.0/8</code>, <code className="text-slate-200">192.168.0.0/16</code>, and cloud metadata (<code className="text-slate-200">169.254.169.254</code>).</p>
               <p>· Verifies DNS A/AAAA records on every redirect hop.</p>
-              <p>· Enforces IP rate limiting, 15s upstream timeouts, and automatic temp-file cleanup.</p>
+              <p>· Enforces IP rate limiting and 15s upstream timeouts.</p>
             </div>
           </div>
         </div>

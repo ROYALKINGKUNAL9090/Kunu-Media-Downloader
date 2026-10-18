@@ -3,10 +3,10 @@ import { PLATFORMS, PlatformInfo } from '../utils/mediaValidator';
 import { ArrowUpRight, CheckCircle2, Info, Lock } from 'lucide-react';
 
 interface PlatformsSectionProps {
-  onSelectSampleUrl: (url: string) => void;
+  onOpenDownloader: () => void;
 }
 
-export const PlatformsSection: React.FC<PlatformsSectionProps> = ({ onSelectSampleUrl }) => {
+export const PlatformsSection: React.FC<PlatformsSectionProps> = ({ onOpenDownloader }) => {
   const [selectedCategory, setSelectedCategory] = useState<string>('All');
 
   const categories = ['All', 'Direct File', 'Video Platform', 'Social Media', 'Messaging'];
@@ -114,10 +114,10 @@ export const PlatformsSection: React.FC<PlatformsSectionProps> = ({ onSelectSamp
 
               <button
                 type="button"
-                onClick={() => onSelectSampleUrl(platform.exampleUrl)}
+                onClick={onOpenDownloader}
                 className="px-3 py-1.5 text-xs font-semibold text-purple-300 hover:text-white bg-purple-950/50 hover:bg-purple-900/60 border border-purple-500/30 rounded-lg flex items-center gap-1 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
               >
-                <span>Test Source</span>
+                <span>Open Analyzer</span>
                 <ArrowUpRight className="w-3.5 h-3.5" />
               </button>
             </div>

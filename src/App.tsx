@@ -18,10 +18,8 @@ import { ShieldCheck, Film, Music, Globe } from 'lucide-react';
 
 export default function App() {
   const [activePage, setActivePage] = useState<PageId>('home');
-  const [prefilledUrl, setPrefilledUrl] = useState<string>('');
 
-  const handleSelectSampleAndOpenDownloader = (url: string) => {
-    setPrefilledUrl(url);
+  const handleOpenDownloader = () => {
     setActivePage('downloader');
     window.scrollTo({ top: 0, behavior: 'smooth' });
   };
@@ -58,12 +56,12 @@ export default function App() {
               </h1>
 
               <p className="text-sm md:text-base text-slate-300 max-w-2xl mx-auto leading-relaxed">
-                Inspect upstream MIME headers, verify genuine native resolutions from 144p to 2160p 4K, extract audio tracks, and evaluate platform policies across 13 media networks—backed by SSRF security and zero paid APIs.
+                Inspect upstream MIME headers, verify genuine native resolutions, preview original media streams, and evaluate platform policies across 13 media networks—backed by SSRF security and zero paid APIs.
               </p>
 
               {/* Central Downloader Workspace */}
               <div className="text-left pt-2">
-                <DownloaderWorkspace initialUrl={prefilledUrl} />
+                <DownloaderWorkspace />
               </div>
 
               {/* 4-Column Capability Proof Strip */}
@@ -73,20 +71,20 @@ export default function App() {
                     <Film className="w-4 h-4" />
                     <span>Authentic Resolutions</span>
                   </div>
-                  <div className="text-base font-bold text-white font-display">144p to 2160p 4K</div>
+                  <div className="text-base font-bold text-white font-display">Original Source Quality</div>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    Displays only verified source qualities and native video dimensions without fabricated options.
+                    Preserves the exact source stream and displays only genuine detected dimensions without fabricated options.
                   </p>
                 </div>
 
                 <div className="bg-[#0e0a1f]/75 border border-slate-800/90 rounded-xl p-5 space-y-1.5">
                   <div className="flex items-center gap-2 text-blue-400 text-xs font-semibold">
                     <Music className="w-4 h-4" />
-                    <span>Studio Audio Formats</span>
+                    <span>Direct Audio Formats</span>
                   </div>
                   <div className="text-base font-bold text-white font-display">MP3, M4A, WAV & OGG</div>
                   <p className="text-xs text-slate-400 leading-relaxed">
-                    Download direct audio files or extract audio tracks when server-side FFmpeg is available.
+                    Stream and save direct audio files or inspect synchronized audio tracks from verified media links.
                   </p>
                 </div>
 
@@ -115,10 +113,10 @@ export default function App() {
             </section>
 
             {/* Supported Platforms Matrix */}
-            <PlatformsSection onSelectSampleUrl={handleSelectSampleAndOpenDownloader} />
+            <PlatformsSection onOpenDownloader={handleOpenDownloader} />
 
             {/* How to Use & Free Deployment Guide */}
-            <HowToUseAndDeploy onTrySample={handleSelectSampleAndOpenDownloader} />
+            <HowToUseAndDeploy onOpenDownloader={handleOpenDownloader} />
 
             {/* FAQ Section */}
             <FAQSection />
@@ -133,19 +131,19 @@ export default function App() {
                 Kunu Media Downloader Workspace
               </h1>
               <p className="text-sm md:text-base text-slate-300 max-w-2xl">
-                Analyze direct MP4, WebM, MP3, WAV, OGG, and M4A links, preview streams directly in your browser, and manage your local download history.
+                Analyze direct MP4, WebM, MP3, WAV, OGG, and M4A links, preview the actual source stream directly in your browser, and manage your local download history.
               </p>
             </div>
-            <DownloaderWorkspace initialUrl={prefilledUrl} />
+            <DownloaderWorkspace />
           </div>
         )}
 
         {activePage === 'platforms' && (
-          <PlatformsSection onSelectSampleUrl={handleSelectSampleAndOpenDownloader} />
+          <PlatformsSection onOpenDownloader={handleOpenDownloader} />
         )}
 
         {activePage === 'how-to-use' && (
-          <HowToUseAndDeploy onTrySample={handleSelectSampleAndOpenDownloader} />
+          <HowToUseAndDeploy onOpenDownloader={handleOpenDownloader} />
         )}
 
         {activePage === 'faq' && <FAQSection />}

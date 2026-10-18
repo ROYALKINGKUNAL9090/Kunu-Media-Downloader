@@ -50,7 +50,6 @@ interface AnalysisResponse {
   durationSec?: number;
   acceptRanges: boolean;
   corsDirectSupported: boolean;
-  ffmpegAvailable?: boolean;
   streamOptions: AvailableStreamOption[];
   notice?: string;
   limitationExplanation?: string;
@@ -62,30 +61,7 @@ interface DownloaderWorkspaceProps {
   compactHero?: boolean;
 }
 
-const HISTORY_STORAGE_KEY = 'kunu_download_history_v1';
-
-const SAMPLE_PRESETS = [
-  {
-    label: 'Sample 720p HD Video (MP4)',
-    url: '/api/sample-media/cosmos-hd.mp4',
-    type: 'Direct MP4 · 1280×720'
-  },
-  {
-    label: 'Sample Studio Audio (WAV)',
-    url: '/api/sample-media/synthwave-harmony.wav',
-    type: 'Direct WAV · 44.1kHz'
-  },
-  {
-    label: 'YouTube oEmbed Test',
-    url: 'https://www.youtube.com/watch?v=dQw4w9WgXcQ',
-    type: 'Platform Detection'
-  },
-  {
-    label: 'SSRF Security Test (169.254.169.254)',
-    url: 'http://169.254.169.254/latest/meta-data/',
-    type: 'Security Block Test'
-  }
-];
+const HISTORY_STORAGE_KEY = 'kunu_download_history_v2';
 
 export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
   initialUrl = '',
@@ -96,7 +72,9 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
   const [analysisResult, setAnalysisResult] = useState<AnalysisResponse | null>(null);
   const [selectedOptionId, setSelectedOptionId] = useState<string>('');
   const [activeTab, setActiveTab] = useState<'video' | 'audio'>('video');
-  const [userHasPermission, setUserHasPermission] = useState(true);
+
+  const [useProxyPreview, setUseProxyPreview] = useState(false);
+  const [previewError, setPreviewError] = useState<string | null>(null);
 
   const [isDownloading, setIsDownloading] = useState(false);
   const [downloadProgress, setDownloadProgress] = useState<number | null>(null);
@@ -112,15 +90,22 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
   const [copiedId, setCopiedId] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement | null>(null);
+  const inputRef = useRef<HTMLInputElement | null>(null);
 
-  // Load history from localStorage on mount
+  // Load history from localStorage on mount (filtering out any legacy sample entries)
   useEffect(() => {
     try {
       const saved = localStorage.getItem(HISTORY_STORAGE_KEY);
       if (saved) {
         const parsed = JSON.parse(saved);
         if (Array.isArray(parsed)) {
-          setHistory(parsed);
+          const clean = parsed.filter(
+            (item: DownloadHistoryItem) =>
+              item &&
+              typeof item.sourceUrl === 'string' &&
+              !item.sourceUrl.startsWith('/api/sample-media/')
+          );
+          setHistory(clean);
         }
       }
     } catch {
@@ -128,7 +113,7 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
     }
   }, []);
 
-  // Update input when initialUrl prop changes (e.g. from clicking a Platform Card)
+  // Update input when initialUrl prop changes
   useEffect(() => {
     if (initialUrl && initialUrl !== urlInput) {
       setUrlInput(initialUrl);
@@ -154,7 +139,7 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
           setUrlInput(text.trim());
           setStatusMessage({
             type: 'info',
-            text: 'URL pasted from clipboard. Click "Analyze Media" to inspect available streams.'
+            text: 'URL pasted from clipboard. Click "Analyze Media" to inspect the source.'
           });
           return;
         }
@@ -176,10 +161,13 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
     setAnalysisResult(null);
     setSelectedOptionId('');
     setStatusMessage(null);
+    setPreviewError(null);
+    setUseProxyPreview(false);
     setIsDownloading(false);
     setDownloadProgress(null);
     setDownloadedBytes(0);
     setTotalBytes(null);
+    inputRef.current?.focus();
   };
 
   const handleAnalyze = async (overrideUrl?: string) => {
@@ -187,11 +175,16 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
     setStatusMessage(null);
     setAnalysisResult(null);
     setDownloadProgress(null);
+    setPreviewError(null);
+    setUseProxyPreview(false);
 
-    const validation = validateMediaUrl(targetUrl, true);
+    const validation = validateMediaUrl(targetUrl);
     if (!validation.valid) {
       setStatusMessage({
-        type: validation.errorCode === 'SSRF_BLOCKED' || validation.errorCode === 'CREDENTIALS_IN_URL' ? 'security' : 'error',
+        type:
+          validation.errorCode === 'SSRF_BLOCKED' || validation.errorCode === 'CREDENTIALS_IN_URL'
+            ? 'security'
+            : 'error',
         text: validation.error || 'Invalid URL.'
       });
       return;
@@ -205,46 +198,49 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
         body: JSON.stringify({ url: validation.sanitizedUrl })
       });
 
-      const data = await response.json();
-      if (!response.ok) {
+      const data = await response.json().catch(() => null);
+      if (!response.ok || !data) {
         setStatusMessage({
-          type: data.errorCode === 'SSRF_BLOCKED' ? 'security' : 'error',
-          text: data.error || 'Failed to analyze URL.'
+          type: data?.errorCode === 'SSRF_BLOCKED' ? 'security' : 'error',
+          text: data?.error || `Failed to analyze URL (HTTP ${response.status}).`
         });
         return;
       }
 
       const result = data as AnalysisResponse;
       setAnalysisResult(result);
+      // Use proxy stream for preview if upstream server does not advertise permissive CORS
+      setUseProxyPreview(!result.corsDirectSupported);
 
       if (result.canDirectDownload && result.streamOptions.length > 0) {
         const hasVideo = result.streamOptions.some((o) => !o.isAudioOnly);
         setActiveTab(hasVideo ? 'video' : 'audio');
-        const firstMatching = result.streamOptions.find((o) => (hasVideo ? !o.isAudioOnly : o.isAudioOnly)) || result.streamOptions[0];
+        const firstMatching =
+          result.streamOptions.find((o) => (hasVideo ? !o.isAudioOnly : o.isAudioOnly)) ||
+          result.streamOptions[0];
         setSelectedOptionId(firstMatching.id);
         setStatusMessage({
           type: 'success',
-          text: `Verified ${result.streamOptions.length} authentic stream option${result.streamOptions.length === 1 ? '' : 's'} from ${result.platform.name}.`
+          text: `Source verified: ${result.title} (${result.mimeType}). Ready for preview and download.`
         });
       } else {
         setStatusMessage({
-          type: 'info',
-          text: `Source identified as ${result.platform.name} (${result.platform.statusLabel}). Review the technical details below.`
+          type: 'error',
+          text: `Direct media stream could not be extracted from ${result.platform.name}. See details below.`
         });
       }
     } catch {
-      // Fallback client-side analysis if deployed as static SPA on Vercel without Node backend
       const detected = detectPlatform(targetUrl);
       setStatusMessage({
         type: 'error',
-        text: `Could not reach backend analysis service for ${detected.name}. Ensure the server is running.`
+        text: `Network error while contacting backend analysis service for ${detected.name}. Please verify your connection and try again.`
       });
     } finally {
       setIsAnalyzing(false);
     }
   };
 
-  // When the HTML5 <video> preview loads metadata in the browser, read its real intrinsic videoWidth x videoHeight
+  // When the HTML5 <video> preview loads metadata in the browser, read its actual intrinsic videoWidth x videoHeight
   const handleVideoLoadedMetadata = () => {
     const vid = videoRef.current;
     if (!vid || !analysisResult) return;
@@ -278,9 +274,24 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
         ...analysisResult,
         videoWidth: w,
         videoHeight: h,
-        durationSec: vid.duration && Number.isFinite(vid.duration) ? Math.round(vid.duration) : analysisResult.durationSec,
+        durationSec:
+          vid.duration && Number.isFinite(vid.duration)
+            ? Math.round(vid.duration)
+            : analysisResult.durationSec,
         streamOptions: updatedOptions
       });
+    }
+  };
+
+  const handleMediaPreviewError = () => {
+    if (!analysisResult) return;
+    if (!useProxyPreview) {
+      // Automatically switch from direct URL to backend proxy stream if direct playback hit CORS restrictions
+      setUseProxyPreview(true);
+    } else {
+      setPreviewError(
+        'Browser preview could not decode this stream directly, or the remote host blocked inline playback. You can still attempt to download the original file.'
+      );
     }
   };
 
@@ -293,16 +304,6 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
 
     if (!chosenOption) return;
 
-    // Require permission check if using server-side FFmpeg conversion
-    const isServerConversion = chosenOption.directUrl.startsWith('/api/convert');
-    if (isServerConversion && !userHasPermission) {
-      setStatusMessage({
-        type: 'error',
-        text: 'Please confirm that you own or have permission to process this media before using server-side conversion.'
-      });
-      return;
-    }
-
     setIsDownloading(true);
     setDownloadProgress(0);
     setDownloadedBytes(0);
@@ -310,36 +311,46 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
     setStatusMessage(null);
 
     const ext = chosenOption.container.toLowerCase();
-    const baseCleanTitle = analysisResult.title
-      .replace(/\.[a-zA-Z0-9]{2,4}$/, '')
-      .replace(/[^a-zA-Z0-9._-]/g, '_')
-      .slice(0, 60) || 'kunu-media';
-    const qualitySlug = chosenOption.label.replace(/\s+/g, '-').toLowerCase();
-    const downloadFilename = `${baseCleanTitle}-${qualitySlug}.${ext}`;
+    const baseCleanTitle =
+      analysisResult.title
+        .replace(/\.[a-zA-Z0-9]{2,4}$/, '')
+        .replace(/[^a-zA-Z0-9._-]/g, '_')
+        .slice(0, 60) || 'media-file';
+    const hasExtAlready = baseCleanTitle.toLowerCase().endsWith(`.${ext}`);
+    const downloadFilename = hasExtAlready ? baseCleanTitle : `${baseCleanTitle}.${ext}`;
 
-    // Determine download endpoint:
-    // 1. Built-in sample media or server conversion -> fetch directly from same origin
-    // 2. External direct media -> stream via /api/stream proxy (handles CORS safely and enforces size/SSRF limits)
-    const fetchEndpoint =
-      chosenOption.directUrl.startsWith('/api/')
-        ? chosenOption.directUrl.includes('?')
-          ? `${chosenOption.directUrl}&download=1`
-          : `${chosenOption.directUrl}?download=1`
-        : `/api/stream?url=${encodeURIComponent(chosenOption.directUrl)}&filename=${encodeURIComponent(downloadFilename)}`;
+    const fetchEndpoint = `/api/stream?url=${encodeURIComponent(chosenOption.directUrl)}&filename=${encodeURIComponent(downloadFilename)}`;
 
     try {
       const response = await fetch(fetchEndpoint);
       if (!response.ok || !response.body) {
         const errData = await response.json().catch(() => null);
-        throw new Error(errData?.error || `Download failed with HTTP ${response.status}.`);
+        throw new Error(
+          errData?.error ||
+            `Download failed: Upstream server responded with HTTP ${response.status}.`
+        );
+      }
+
+      const responseContentType = (response.headers.get('content-type') || '').toLowerCase();
+      if (
+        responseContentType.includes('application/json') ||
+        responseContentType.includes('text/html')
+      ) {
+        const errData = await response.json().catch(() => null);
+        throw new Error(
+          errData?.error ||
+            'The remote URL returned a webpage or error response instead of a media stream.'
+        );
       }
 
       const contentLengthHeader = response.headers.get('content-length');
-      const total = contentLengthHeader ? Number(contentLengthHeader) : chosenOption.sizeBytes || null;
+      const total = contentLengthHeader
+        ? Number(contentLengthHeader)
+        : chosenOption.sizeBytes || null;
       setTotalBytes(total);
 
       const reader = response.body.getReader();
-      const chunks: Uint8Array[] = [];
+      const chunks: BlobPart[] = [];
       let received = 0;
 
       while (true) {
@@ -355,7 +366,15 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
         }
       }
 
-      const blob = new Blob(chunks, { type: chosenOption.mimeType || 'application/octet-stream' });
+      if (received === 0) {
+        throw new Error(
+          'Download failed: The remote server returned 0 bytes. The link may be expired or restricted.'
+        );
+      }
+
+      const blob = new Blob(chunks, {
+        type: chosenOption.mimeType || responseContentType || 'application/octet-stream'
+      });
       const blobUrl = URL.createObjectURL(blob);
 
       const anchor = document.createElement('a');
@@ -369,7 +388,7 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
       setDownloadProgress(100);
       setStatusMessage({
         type: 'success',
-        text: `Download complete: "${downloadFilename}" (${formatBytes(received)}) saved to your device.`
+        text: `Download complete: "${downloadFilename}" (${formatBytes(received)}) saved from ${new URL(analysisResult.finalUrl).hostname}.`
       });
 
       const newHistoryItem: DownloadHistoryItem = {
@@ -385,9 +404,12 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
 
       saveHistory([newHistoryItem, ...history.slice(0, 24)]);
     } catch (err: any) {
+      setDownloadProgress(null);
       setStatusMessage({
         type: 'error',
-        text: err.message || 'Download could not be completed. Check CORS or file permissions.'
+        text:
+          err.message ||
+          'Download could not be completed. Verify the URL is a valid, publicly accessible media stream.'
       });
     } finally {
       setIsDownloading(false);
@@ -415,6 +437,12 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
   const audioOptions = analysisResult?.streamOptions.filter((o) => o.isAudioOnly) || [];
   const displayedOptions = activeTab === 'video' ? videoOptions : audioOptions;
 
+  const previewMediaSrc = analysisResult
+    ? useProxyPreview
+      ? `/api/stream?url=${encodeURIComponent(analysisResult.finalUrl)}&inline=1`
+      : analysisResult.finalUrl
+    : '';
+
   return (
     <section aria-label="Media Downloader Workspace" className="w-full max-w-5xl mx-auto">
       {/* Main Glassmorphism Downloader Card */}
@@ -425,7 +453,7 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
               Direct Media Analyzer & Downloader
             </h2>
             <p className="text-sm text-slate-300 mt-0.5">
-              Paste a direct media link (MP4, WebM, MP3, WAV, OGG, M4A) or platform URL to inspect available streams.
+              Paste a direct media link (MP4, WebM, MP3, WAV, OGG, M4A) to inspect, preview, and download the actual source file.
             </p>
           </div>
           <div className="text-xs text-slate-400 font-mono tabular-nums shrink-0">
@@ -439,7 +467,7 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
             e.preventDefault();
             handleAnalyze();
           }}
-          className="space-y-4"
+          className="space-y-3"
         >
           <div className="flex flex-col sm:flex-row gap-3">
             <div className="relative flex-1">
@@ -447,11 +475,12 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
                 Media URL
               </label>
               <input
+                ref={inputRef}
                 id="kunu-media-url-input"
                 type="text"
                 value={urlInput}
                 onChange={(e) => setUrlInput(e.target.value)}
-                placeholder="https://example.com/media/video.mp4 or /api/sample-media/cosmos-hd.mp4"
+                placeholder="https://example.com/path/to/video.mp4"
                 className="w-full bg-[#070510] border border-slate-700/80 focus:border-purple-400 focus:outline-none rounded-xl px-4 py-3.5 text-sm md:text-base text-white placeholder-slate-500 font-mono transition-colors"
               />
             </div>
@@ -498,22 +527,11 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
             </div>
           </div>
 
-          {/* Instant Verified Test Presets */}
-          <div className="flex flex-wrap items-center gap-2 pt-1">
-            <span className="text-xs text-slate-400 mr-1">Try verified test links:</span>
-            {SAMPLE_PRESETS.map((preset) => (
-              <button
-                key={preset.url}
-                type="button"
-                onClick={() => {
-                  setUrlInput(preset.url);
-                  handleAnalyze(preset.url);
-                }}
-                className="text-xs text-purple-300 hover:text-white bg-purple-950/40 hover:bg-purple-900/50 border border-purple-500/25 rounded-lg px-2.5 py-1.5 transition-colors whitespace-nowrap shrink-0 cursor-pointer"
-              >
-                {preset.label}
-              </button>
-            ))}
+          <div className="text-xs text-slate-400 flex flex-wrap items-center gap-x-2 gap-y-1">
+            <span>Supported direct formats:</span>
+            <span className="font-mono text-slate-300">MP4 · WebM · MP3 · WAV · OGG · M4A</span>
+            <span aria-hidden="true">·</span>
+            <span>Preserves original source file & audio track</span>
           </div>
         </form>
 
@@ -526,9 +544,11 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
           >
             <Loader2 className="w-6 h-6 text-purple-400 animate-spin shrink-0" />
             <div>
-              <p className="text-sm font-semibold text-white">Inspecting upstream media headers & security policy...</p>
+              <p className="text-sm font-semibold text-white">
+                Inspecting upstream media headers & verifying source stream...
+              </p>
               <p className="text-xs text-slate-400 mt-0.5">
-                Verifying DNS records against SSRF rules, checking Content-Type, and probing native stream resolutions.
+                Checking DNS/SSRF rules, following redirects safely, and reading actual Content-Type and native stream dimensions.
               </p>
             </div>
           </div>
@@ -548,10 +568,18 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
                 : 'bg-blue-950/40 border-blue-500/30 text-blue-200'
             }`}
           >
-            {statusMessage.type === 'security' && <ShieldAlert className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />}
-            {statusMessage.type === 'error' && <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />}
-            {statusMessage.type === 'success' && <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />}
-            {statusMessage.type === 'info' && <Search className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />}
+            {statusMessage.type === 'security' && (
+              <ShieldAlert className="w-5 h-5 text-red-400 shrink-0 mt-0.5" />
+            )}
+            {statusMessage.type === 'error' && (
+              <AlertTriangle className="w-5 h-5 text-amber-400 shrink-0 mt-0.5" />
+            )}
+            {statusMessage.type === 'success' && (
+              <CheckCircle2 className="w-5 h-5 text-emerald-400 shrink-0 mt-0.5" />
+            )}
+            {statusMessage.type === 'info' && (
+              <Search className="w-5 h-5 text-blue-400 shrink-0 mt-0.5" />
+            )}
             <div className="flex-1">
               <p className="font-medium leading-relaxed">{statusMessage.text}</p>
             </div>
@@ -565,7 +593,9 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
             <div className="flex flex-col lg:flex-row lg:items-center justify-between gap-4">
               <div className="space-y-1">
                 <div className="flex flex-wrap items-center gap-2 text-xs text-slate-400">
-                  <span className="text-purple-300 font-semibold">{analysisResult.platform.name}</span>
+                  <span className="text-purple-300 font-semibold">
+                    {analysisResult.platform.name}
+                  </span>
                   <span aria-hidden="true">·</span>
                   <span>{analysisResult.platform.statusLabel}</span>
                   <span aria-hidden="true">·</span>
@@ -573,7 +603,9 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
                   {analysisResult.sizeBytes !== null && (
                     <>
                       <span aria-hidden="true">·</span>
-                      <span className="font-mono tabular-nums">{formatBytes(analysisResult.sizeBytes)}</span>
+                      <span className="font-mono tabular-nums">
+                        {formatBytes(analysisResult.sizeBytes)}
+                      </span>
                     </>
                   )}
                   {analysisResult.videoWidth && analysisResult.videoHeight && (
@@ -586,8 +618,13 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
                   )}
                 </div>
                 <h3 className="text-lg font-bold text-white break-all">{analysisResult.title}</h3>
+                <p className="text-xs text-slate-400 font-mono break-all">
+                  Source URL: {analysisResult.finalUrl}
+                </p>
                 {analysisResult.authorName && (
-                  <p className="text-xs text-slate-400">Creator / Channel: {analysisResult.authorName}</p>
+                  <p className="text-xs text-slate-400">
+                    Creator / Channel: {analysisResult.authorName}
+                  </p>
                 )}
               </div>
 
@@ -599,42 +636,51 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
             {/* Case A: Legitimate Direct Downloadable Media Stream */}
             {analysisResult.canDirectDownload ? (
               <div className="grid grid-cols-1 lg:grid-cols-12 gap-6 items-start">
-                {/* Media Preview Box (5 cols) */}
+                {/* Media Preview Box (5 cols) — plays the exact supplied source URL */}
                 <div className="lg:col-span-5 bg-[#070510] border border-slate-800 rounded-xl p-4 space-y-3">
                   <div className="text-xs font-medium text-slate-400 flex items-center justify-between">
-                    <span>Live Source Stream Preview</span>
-                    <span className="font-mono">{analysisResult.corsDirectSupported ? 'CORS Open' : 'Proxy Stream'}</span>
+                    <span>Actual Source Stream Preview</span>
+                    <span className="font-mono">
+                      {useProxyPreview ? 'Stream Proxy' : 'Direct CORS'}
+                    </span>
                   </div>
 
                   {analysisResult.mimeType.startsWith('video/') ? (
                     <video
+                      key={previewMediaSrc}
                       ref={videoRef}
-                      src={analysisResult.finalUrl}
+                      src={previewMediaSrc}
                       controls
                       preload="metadata"
                       onLoadedMetadata={handleVideoLoadedMetadata}
+                      onError={handleMediaPreviewError}
                       className="w-full rounded-lg bg-black aspect-video object-contain border border-slate-800"
                     />
                   ) : (
                     <div className="py-6 px-4 bg-[#0d0920] rounded-lg border border-purple-500/20 flex flex-col items-center justify-center gap-3">
                       <Music className="w-8 h-8 text-purple-400" />
                       <audio
-                        src={analysisResult.finalUrl}
+                        key={previewMediaSrc}
+                        src={previewMediaSrc}
                         controls
                         preload="metadata"
+                        onError={handleMediaPreviewError}
                         className="w-full"
                       />
                     </div>
                   )}
 
-                  <p className="text-xs text-slate-400 leading-relaxed">
-                    Only resolutions and audio formats genuinely present or derivable from this source are listed.
-                  </p>
+                  {previewError ? (
+                    <p className="text-xs text-amber-300 leading-relaxed">{previewError}</p>
+                  ) : (
+                    <p className="text-xs text-slate-400 leading-relaxed">
+                      Playing directly from the supplied media URL with its original synchronized audio stream.
+                    </p>
+                  )}
                 </div>
 
                 {/* Verified Quality & Format Selection + Download Action (7 cols) */}
                 <div className="lg:col-span-7 bg-[#070510] border border-slate-800 rounded-xl p-5 space-y-5">
-                  {/* Video vs Audio Filter Tabs */}
                   <div className="flex items-center justify-between gap-4 flex-wrap">
                     <div className="flex items-center gap-1 p-1 bg-slate-900 rounded-lg border border-slate-800">
                       {videoOptions.length > 0 && (
@@ -651,7 +697,7 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
                           }`}
                         >
                           <Film className="w-3.5 h-3.5" />
-                          <span>Video Qualities ({videoOptions.length})</span>
+                          <span>Video Stream ({videoOptions.length})</span>
                         </button>
                       )}
                       {audioOptions.length > 0 && (
@@ -668,13 +714,13 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
                           }`}
                         >
                           <Music className="w-3.5 h-3.5" />
-                          <span>Audio Formats ({audioOptions.length})</span>
+                          <span>Audio Stream ({audioOptions.length})</span>
                         </button>
                       )}
                     </div>
 
                     <span className="text-xs text-slate-400 font-mono">
-                      Verified Source Formats Only
+                      Genuine Source Quality Only
                     </span>
                   </div>
 
@@ -701,32 +747,19 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
                             </div>
                           </div>
                           <div className="text-xs font-mono tabular-nums text-slate-300 shrink-0">
-                            {opt.sizeBytes ? formatBytes(opt.sizeBytes) : 'Stream'}
+                            {opt.sizeBytes ? formatBytes(opt.sizeBytes) : 'Direct Stream'}
                           </div>
                         </button>
                       );
                     })}
                   </div>
 
-                  {/* Permission Checkbox for media processing */}
-                  <label className="flex items-start gap-2.5 text-xs text-slate-300 cursor-pointer select-none">
-                    <input
-                      type="checkbox"
-                      checked={userHasPermission}
-                      onChange={(e) => setUserHasPermission(e.target.checked)}
-                      className="mt-0.5 rounded border-slate-700 text-purple-600 focus:ring-purple-500"
-                    />
-                    <span>
-                      I confirm that I own this media file or have explicit permission from the copyright holder to download and process it.
-                    </span>
-                  </label>
-
                   {/* Real-Time Progress Indicator */}
                   {(isDownloading || downloadProgress !== null) && (
                     <div className="space-y-2 bg-slate-900/90 border border-slate-800 rounded-xl p-3.5">
                       <div className="flex items-center justify-between text-xs font-mono tabular-nums">
                         <span className="text-purple-300">
-                          {isDownloading ? 'Streaming media bytes...' : 'Transfer complete'}
+                          {isDownloading ? 'Streaming source media bytes...' : 'Transfer complete'}
                         </span>
                         <span className="text-white">
                           {formatBytes(downloadedBytes)}
@@ -753,14 +786,15 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
                     {isDownloading ? (
                       <>
                         <Loader2 className="w-4 h-4 animate-spin" />
-                        <span>Downloading Media Stream...</span>
+                        <span>Downloading Source Media...</span>
                       </>
                     ) : (
                       <>
                         <Download className="w-4 h-4" />
                         <span>
                           Download{' '}
-                          {displayedOptions.find((o) => o.id === selectedOptionId)?.label || 'Selected Media'}
+                          {displayedOptions.find((o) => o.id === selectedOptionId)?.label ||
+                            'Original File'}
                         </span>
                       </>
                     )}
@@ -768,7 +802,7 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
                 </div>
               </div>
             ) : (
-              /* Case B: Platform with DRM / Auth / API Restriction — Transparent Explanation + Supported Alternative */
+              /* Case B: Unsupported / Restricted Platform URL — Accurate Explanation, Zero Fake Video */
               <div className="bg-[#070510] border border-slate-800 rounded-xl p-6 space-y-4">
                 <div className="flex flex-col md:flex-row gap-5 items-start">
                   {analysisResult.thumbnailUrl && (
@@ -785,26 +819,27 @@ export const DownloaderWorkspace: React.FC<DownloaderWorkspaceProps> = ({
                   <div className="space-y-3 flex-1">
                     <div className="flex items-center gap-2 text-amber-300 text-sm font-semibold">
                       <AlertTriangle className="w-4 h-4 shrink-0" />
-                      <span>Direct Stream Extraction Restricted on {analysisResult.platform.name}</span>
+                      <span>
+                        Source Cannot Be Extracted Directly from {analysisResult.platform.name}
+                      </span>
                     </div>
                     <p className="text-sm text-slate-300 leading-relaxed">
-                      <strong className="text-white">Why direct download is disabled:</strong>{' '}
-                      {analysisResult.limitationExplanation || analysisResult.platform.technicalLimitation}
+                      <strong className="text-white">Why this source cannot be downloaded here:</strong>{' '}
+                      {analysisResult.limitationExplanation ||
+                        analysisResult.platform.technicalLimitation}
                     </p>
                     <p className="text-sm text-slate-300 leading-relaxed">
                       <strong className="text-purple-300">Supported legitimate alternative:</strong>{' '}
-                      {analysisResult.supportedAlternative || analysisResult.platform.supportedAlternative}
+                      {analysisResult.supportedAlternative ||
+                        analysisResult.platform.supportedAlternative}
                     </p>
                     <div className="pt-2 flex flex-wrap items-center gap-3">
                       <button
                         type="button"
-                        onClick={() => {
-                          setUrlInput('/api/sample-media/cosmos-hd.mp4');
-                          handleAnalyze('/api/sample-media/cosmos-hd.mp4');
-                        }}
+                        onClick={handleClear}
                         className="px-4 py-2 text-xs font-semibold text-white bg-purple-600 hover:bg-purple-500 rounded-lg transition-colors cursor-pointer"
                       >
-                        Test Direct 720p HD Video Download Instead
+                        Enter a Direct Media URL (.mp4, .webm, .mp3, .m4a)
                       </button>
                       <a
                         href={analysisResult.finalUrl}
